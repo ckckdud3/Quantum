@@ -133,6 +133,16 @@ def cost_function(paras):
 
 
 def fit(sweep_range, initial_parameters):
+    """
+    Performs optimization with phi values starting from initialized parameters.
+
+    Args:
+        sweep_range (torch.Tensor): phi's spanning range. Formatted as [start, stop, step].
+        initial_parameters (torch.Tensor): initial values of theta_x, phi_z.
+
+    Returns:
+        data (torch.Tensor): optimization tracking data.
+    """
 
     phi = torch.arange(*sweep_range, dtype=torch.float32)
 
@@ -154,8 +164,8 @@ def fit(sweep_range, initial_parameters):
     f_logs = [cost_function(params_tensor).item()]
 
     # variables for early stopping
-    steps = 100
-    ftol = 1e-7
+    steps = 500
+    ftol = 1e-9
     patience = 0
 
     lval = 0.
@@ -170,11 +180,11 @@ def fit(sweep_range, initial_parameters):
             lval = opt.step(closure).item()
             f_logs.append(lval)
             if i:
-                if np.abs(f_logs[i] - f_logs[i-1]) < ftol:
+                if np.abs(f_logs[i] - f_logs[i-1] / f_logs[i]) < ftol:
                     patience += 1
                 else: patience = 0
 
-            if patience > 3: break
+            if patience > 5: break
             
         data[phi_idx, 1] = -lval
         data[phi_idx, 2:] = params_tensor
@@ -218,7 +228,7 @@ init_par = torch.tensor([
     torch.pi/2
     ], dtype=torch.float)
 
-tau_dephase = 0., 0.25, 0.5, 0.75
+tau_dephase = 0.,
 gamma_ps = 0.5
 
 start_time = time.time()
@@ -228,9 +238,10 @@ end_time = time.time()
 running_time = (end_time - start_time) / 60
 
 
-for i in range(4):
-    plt.plot(res[i][:,0], res[i][:,1], label=f'{tau_dephase[i]}')
 
-plt.legend()
+plt.plot(res[0][:,0], res[0][:,1], label=f'{tau_dephase[0]}')
+
 plt.show()
+
+np.save(f'./opt_result.npy', res)
 
