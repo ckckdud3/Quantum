@@ -42,7 +42,6 @@ def Dephase_factor(tau):
     return 1 - torch.exp(-2 * tau)
 
 
-@qml.compile
 @qml.qnode(dev, interface = 'torch', diff_method = 'backprop')
 def circuit(phi):
     """ 
@@ -71,7 +70,7 @@ def circuit(phi):
     
     return qml.density_matrix(wires = 0)
 
-@qml.compile
+
 @qml.qnode(dev, interface='torch', diff_method='backprop')
 def post_selection(phi):
     """ 
@@ -85,7 +84,6 @@ def post_selection(phi):
     """
     global param_global, gamma_ps_global
     get_density_matrix = circuit(phi)
-        
     # Kraus operator for 2*2 matrix
     K = torch.tensor([
         [torch.sqrt(1 - gamma_ps_global), 0],
@@ -97,7 +95,6 @@ def post_selection(phi):
     rho_ps = Numerator / Denominator
 
     qml.QubitDensityMatrix(rho_ps, wires = 0)
-    
     return qml.density_matrix(wires = 0) 
 
 
@@ -109,10 +106,10 @@ def set_circuit(desired_tau_dephase, desired_gamma_post_selection):
         desired_tau_dephase (float): Desired dephasing rate tau.
         desired_gamma_post_selection (float): Desired post-selection rate gamma.
     """
-    global Tau_global, Gamma_ps_global 
+    global tau_global, gamma_ps_global 
     
-    Tau_global = torch.tensor(desired_tau_dephase)
-    Gamma_ps_global = torch.tensor([desired_gamma_post_selection])
+    tau_global = torch.tensor(desired_tau_dephase)
+    gamma_ps_global = torch.tensor(desired_gamma_post_selection)
     
 
 def cost_function(paras):
@@ -128,7 +125,9 @@ def cost_function(paras):
     global param_global, phi_global
     param_global = paras
 
-    CFI = qml.qinfo.classical_fisher(post_selection)(phi_global)
+    phi = 1 * phi_global.clone()
+
+    CFI = qml.qinfo.classical_fisher(post_selection)(phi)
     return -CFI
 
 
@@ -149,7 +148,7 @@ def fit(sweep_range, initial_parameters):
     data = torch.zeros((len(phi), len(initial_parameters) + 2))
     data[:, 0] = phi
 
-    global param_global, phi_global
+    global phi_global
 
     params_tensor = initial_parameters.clone().requires_grad_(True)
 
@@ -164,8 +163,8 @@ def fit(sweep_range, initial_parameters):
     f_logs = [cost_function(params_tensor).item()]
 
     # variables for early stopping
-    steps = 500
-    ftol = 1e-9
+    steps = 15
+    threshold = 1e-9
     patience = 0
 
     lval = 0.
@@ -180,7 +179,7 @@ def fit(sweep_range, initial_parameters):
             lval = opt.step(closure).item()
             f_logs.append(lval)
             if i:
-                if np.abs(f_logs[i] - f_logs[i-1] / f_logs[i]) < ftol:
+                if np.abs(f_logs[i] - f_logs[i-1]) < threshold:
                     patience += 1
                 else: patience = 0
 
@@ -188,7 +187,6 @@ def fit(sweep_range, initial_parameters):
             
         data[phi_idx, 1] = -lval
         data[phi_idx, 2:] = params_tensor
-
     return data
 
 
@@ -228,8 +226,8 @@ init_par = torch.tensor([
     torch.pi/2
     ], dtype=torch.float)
 
-tau_dephase = 0.,
-gamma_ps = 0.5
+tau_dephase = 0., 0.25, 0.5, 0.75
+gamma_ps = 0.75
 
 start_time = time.time()
 res = optimization_by_tau(sweep_range, init_par, tau_dephase, gamma_ps)
@@ -239,9 +237,11 @@ running_time = (end_time - start_time) / 60
 
 
 
-plt.plot(res[0][:,0], res[0][:,1], label=f'{tau_dephase[0]}')
+for i in range(4):
+    plt.plot(res[i][:,0], res[i][:,1], label=f'tau = {tau_dephase[i]}')
 
+plt.legend()
 plt.show()
 
-np.save(f'./opt_result.npy', res)
+np.save(f'./opt_result_gamma{gamma_ps:.2f}.npy', res)
 
