@@ -125,9 +125,7 @@ def cost_function(paras):
     global param_global, phi_global
     param_global = paras
 
-    phi = 1 * phi_global.clone()
-
-    CFI = qml.qinfo.classical_fisher(post_selection)(phi)
+    CFI = qml.qinfo.classical_fisher(post_selection)(phi_global)
     return -CFI
 
 
@@ -243,5 +241,5 @@ for i in range(4):
 plt.legend()
 plt.show()
 
-np.save(f'./opt_result_gamma{gamma_ps:.2f}.npy', res)
+np.save(f'./opt_result_dummy.npy', res)
 
